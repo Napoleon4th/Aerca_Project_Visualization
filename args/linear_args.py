@@ -16,8 +16,8 @@ def create_arg_parser():
     parser.add_argument('--testing_size', type=int, default=100, help='Size of the testing set (default: 100)')
     parser.add_argument('--num_vars', type=int, default=4, help='Number of variables (default: 4)')
     parser.add_argument('--preprocessing_data', type=int, default=1, help='Flag for preprocessing data (default: 1)')
-    parser.add_argument('--adlength', type=int, default=1, help='Ad length (default: 1)')
-    parser.add_argument('--adtype', type=str, default='non_causal', help='Ad type (default: non_causal)')
+    parser.add_argument('--adlength', type=int, default=1, help='Ad length (default: 60)')
+    # parser.add_argument('--adtype', type=str, default='non_causal', help='Ad type (default: non_causal)')
     parser.add_argument('--mul', type=int, default=3, help='Multiplier (default: 3)')
     parser.add_argument('--a', type=int, default=None, help='Parameter a (default: None)')
     parser.add_argument('--data_dir', type=str, default=os.path.join(os.getcwd(), 'datasets', 'linear'), help='Data directory (default: ./datasets/linear)')
@@ -51,6 +51,11 @@ def create_arg_parser():
     parser.add_argument('--risk', type=float, default=1e-2, help='Risk (default: 1e-2)')
     parser.add_argument('--initial_level', type=float, default=0.98, help='Initial level (default: 0.98)')
     parser.add_argument('--num_candidates', type=int, default=100, help='Number of candidates (default: 100)')
+
+    # More
+    parser.add_argument('--adtype', type=str, default='spike',
+                        choices=['spike', 'step', 'causal'],
+                        help='Type of anomaly to inject: spike, step, causal')
 
     return parser
 

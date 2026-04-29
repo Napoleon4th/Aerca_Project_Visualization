@@ -51,12 +51,16 @@ class AERCA(nn.Module):
         self.decoder.to(self.device)
         self.decoder_prev.to(self.device)
         self.model_name = 'AERCA_' + data_name + '_ws_' + str(window_size) + '_stride_' + str(stride) + \
-                          '_encoder_alpha_' + str(encoder_alpha) + '_decoder_alpha_' + str(decoder_alpha) + \
-                          '_encoder_gamma_' + str(encoder_gamma) + '_decoder_gamma_' + str(decoder_gamma) + \
-                          '_encoder_lambda_' + str(encoder_lambda) + '_decoder_lambda_' + str(decoder_lambda) + \
-                          '_beta_' + str(beta) + '_lr_' + str(lr) + '_epochs_' + str(epochs) + \
+                          '_lr_' + str(lr) + '_epochs_' + str(epochs) + \
                           '_hidden_layer_size_' + str(hidden_layer_size) + '_num_hidden_layers_' + \
                           str(num_hidden_layers)
+        # self.model_name = 'AERCA_' + data_name + '_ws_' + str(window_size) + '_stride_' + str(stride) + \
+        #                   '_encoder_alpha_' + str(encoder_alpha) + '_decoder_alpha_' + str(decoder_alpha) + \
+        #                   '_encoder_gamma_' + str(encoder_gamma) + '_decoder_gamma_' + str(decoder_gamma) + \
+        #                   '_encoder_lambda_' + str(encoder_lambda) + '_decoder_lambda_' + str(decoder_lambda) + \
+        #                   '_beta_' + str(beta) + '_lr_' + str(lr) + '_epochs_' + str(epochs) + \
+        #                   '_hidden_layer_size_' + str(hidden_layer_size) + '_num_hidden_layers_' + \
+        #                   str(num_hidden_layers)
         self.causal_quantile = causal_quantile
         self.risk = risk
         self.initial_level = initial_level
@@ -284,15 +288,107 @@ class AERCA(nn.Module):
         np.save(os.path.join(self.save_dir, f'{self.model_name}_us_mean_decoder.npy'), self.us_mean_decoder)
         np.save(os.path.join(self.save_dir, f'{self.model_name}_us_std_decoder.npy'), self.us_std_decoder)
 
+    # def _testing_root_cause(self, xs, labels):
+    #     # Load model and only the encoder-related parameters required for the POT computations.
+    #     self.load_state_dict(torch.load(os.path.join(self.save_dir, f'{self.model_name}.pt'),
+    #                                     map_location=self.device))
+    #     self.eval()
+    #     self.us_mean_encoder = np.load(os.path.join(self.save_dir, f'{self.model_name}_us_mean_encoder.npy'))
+    #     self.us_std_encoder = np.load(os.path.join(self.save_dir, f'{self.model_name}_us_std_encoder.npy'))
+    #
+    #     # Collect the latent representations from each sample.
+    #     us_list = []
+    #     us_sample_list = []
+    #     with torch.no_grad():
+    #         for i in range(len(xs)):
+    #             x = xs[i]
+    #             label = labels[i]
+    #             us = self._testing_step(x, label, add_u=False)[-1]
+    #             us_sample_list.append(us[self.window_size:].cpu().numpy())
+    #             us_list.append(us.cpu().numpy())
+    #
+    #     # Combine all latent representations for POT threshold computation.
+    #     us_all = np.concatenate(us_list, axis=0).reshape(-1, self.num_vars)
+    #     self._log_and_print('=' * 50)
+    #     us_all_z_score = (-(us_all - self.us_mean_encoder) / self.us_std_encoder)
+    #     us_all_z_score_pot = []
+    #     for i in range(self.num_vars):
+    #         pot_val, _ = pot(us_all_z_score[:, i], self.risk, self.initial_level, self.num_candidates)
+    #         us_all_z_score_pot.append(pot_val)
+    #     us_all_z_score_pot = np.array(us_all_z_score_pot)
+    #
+    #     # Compute top-k statistics for each sample using the computed POT thresholds.
+    #     k_all = []
+    #     k_at_step_all = []
+    #     for i in range(len(xs)):
+    #         us_sample = us_sample_list[i]
+    #         z_scores = (-(us_sample - self.us_mean_encoder) / self.us_std_encoder)
+    #         k_lst = topk(z_scores, labels[i][self.window_size * 2:], us_all_z_score_pot)
+    #         k_at_step = topk_at_step(z_scores, labels[i][self.window_size * 2:])
+    #         k_all.append(k_lst)
+    #         k_at_step_all.append(k_at_step)
+    #     k_all = np.array(k_all).mean(axis=0)
+    #     k_at_step_all = np.array(k_at_step_all).mean(axis=0)
+    #     ac_at = [k_at_step_all[0], k_at_step_all[2], k_at_step_all[4], k_at_step_all[9]]
+    #     self._log_and_print('Root cause analysis AC@1: {:.5f}', ac_at[0])
+    #     self._log_and_print('Root cause analysis AC@3: {:.5f}', ac_at[1])
+    #     self._log_and_print('Root cause analysis AC@5: {:.5f}', ac_at[2])
+    #     self._log_and_print('Root cause analysis AC@10: {:.5f}', ac_at[3])
+    #     self._log_and_print('Root cause analysis Avg@10: {:.5f}', np.mean(k_at_step_all))
+    #
+    #     ac_star_at = [k_all[0], k_all[9], k_all[99], k_all[499]]
+    #     self._log_and_print('Root cause analysis AC*@1: {:.5f}', ac_star_at[0])
+    #     self._log_and_print('Root cause analysis AC*@10: {:.5f}', ac_star_at[1])
+    #     self._log_and_print('Root cause analysis AC*@100: {:.5f}', ac_star_at[2])
+    #     self._log_and_print('Root cause analysis AC*@500: {:.5f}', ac_star_at[3])
+    #     self._log_and_print('Root cause analysis Avg*@500: {:.5f}', np.mean(k_all))
+    #
+    # def _testing_causal_discover(self, xs, causal_struct_value):
+    #     self.load_state_dict(torch.load(os.path.join(self.save_dir, f'{self.model_name}.pt'),
+    #                                     map_location=self.device))
+    #     self.eval()
+    #     encoder_causal_list = []
+    #     with torch.no_grad():
+    #         for x in xs:
+    #             # Only the encoder coefficients are used for causal discovery
+    #             _, _, _, encoder_coeffs, _, _, _, _ = self._testing_step(x)
+    #             encoder_estimate = torch.max(torch.median(torch.abs(encoder_coeffs), dim=0)[0],
+    #                                          dim=0).values.cpu().numpy()
+    #             encoder_causal_list.append(encoder_estimate)
+    #     encoder_causal_struct_estimate_lst = np.stack(encoder_causal_list, axis=0)
+    #
+    #     encoder_auroc = []
+    #     encoder_auprc = []
+    #     encoder_hamming = []
+    #     encoder_f1 = []
+    #     for i in range(len(encoder_causal_struct_estimate_lst)):
+    #         encoder_auroc_temp, encoder_auprc_temp = eval_causal_structure(
+    #             a_true=causal_struct_value, a_pred=encoder_causal_struct_estimate_lst[i])
+    #         encoder_auroc.append(encoder_auroc_temp)
+    #         encoder_auprc.append(encoder_auprc_temp)
+    #         encoder_q = np.quantile(encoder_causal_struct_estimate_lst[i], q=self.causal_quantile)
+    #         encoder_a_hat_binary = (encoder_causal_struct_estimate_lst[i] >= encoder_q).astype(float)
+    #         _, _, _, _, ham_e = eval_causal_structure_binary(a_true=causal_struct_value,
+    #                                                          a_pred=encoder_a_hat_binary)
+    #         encoder_hamming.append(ham_e)
+    #         encoder_f1.append(f1_score(causal_struct_value.flatten(), encoder_a_hat_binary.flatten()))
+    #     self._log_and_print('Causal discovery F1: {:.5f} std: {:.5f}',
+    #                         np.mean(encoder_f1), np.std(encoder_f1))
+    #     self._log_and_print('Causal discovery AUROC: {:.5f} std: {:.5f}',
+    #                         np.mean(encoder_auroc), np.std(encoder_auroc))
+    #     self._log_and_print('Causal discovery AUPRC: {:.5f} std: {:.5f}',
+    #                         np.mean(encoder_auprc), np.std(encoder_auprc))
+    #     self._log_and_print('Causal discovery Hamming Distance: {:.5f} std: {:.5f}',
+    #                         np.mean(encoder_hamming), np.std(encoder_hamming))
+
     def _testing_root_cause(self, xs, labels):
-        # Load model and only the encoder-related parameters required for the POT computations.
+        """严格按照原始 topk / topk_at_step 逻辑计算指标，并提取可视化所需的 Top-1"""
         self.load_state_dict(torch.load(os.path.join(self.save_dir, f'{self.model_name}.pt'),
                                         map_location=self.device))
         self.eval()
         self.us_mean_encoder = np.load(os.path.join(self.save_dir, f'{self.model_name}_us_mean_encoder.npy'))
         self.us_std_encoder = np.load(os.path.join(self.save_dir, f'{self.model_name}_us_std_encoder.npy'))
 
-        # Collect the latent representations from each sample.
         us_list = []
         us_sample_list = []
         with torch.no_grad():
@@ -303,50 +399,90 @@ class AERCA(nn.Module):
                 us_sample_list.append(us[self.window_size:].cpu().numpy())
                 us_list.append(us.cpu().numpy())
 
-        # Combine all latent representations for POT threshold computation.
         us_all = np.concatenate(us_list, axis=0).reshape(-1, self.num_vars)
         self._log_and_print('=' * 50)
         us_all_z_score = (-(us_all - self.us_mean_encoder) / self.us_std_encoder)
+
         us_all_z_score_pot = []
         for i in range(self.num_vars):
             pot_val, _ = pot(us_all_z_score[:, i], self.risk, self.initial_level, self.num_candidates)
             us_all_z_score_pot.append(pot_val)
         us_all_z_score_pot = np.array(us_all_z_score_pot)
 
-        # Compute top-k statistics for each sample using the computed POT thresholds.
         k_all = []
         k_at_step_all = []
+        predicted_root_causes = []
+
         for i in range(len(xs)):
             us_sample = us_sample_list[i]
             z_scores = (-(us_sample - self.us_mean_encoder) / self.us_std_encoder)
-            k_lst = topk(z_scores, labels[i][self.window_size * 2:], us_all_z_score_pot)
-            k_at_step = topk_at_step(z_scores, labels[i][self.window_size * 2:])
+            label_sample = labels[i][self.window_size * 2:]
+
+            # 严格使用原始函数计算指标
+            k_lst = topk(z_scores, label_sample, us_all_z_score_pot)
+            k_at_step = topk_at_step(z_scores, label_sample)
+
             k_all.append(k_lst)
             k_at_step_all.append(k_at_step)
+
+            # ====================== 按照 topk_at_step 逻辑提取 Top-1 用于可视化 ======================
+            # topk_at_step 的核心是：对每个时间步独立排序变量
+            # 我们取分数最高的那个时间步，然后在该时间步取分数最高的变量，作为 Top-1
+            if len(label_sample) > 0:
+                # 找到异常分数最高的那个时间步
+                max_score_per_step = np.max(z_scores, axis=1)
+                best_time_idx = np.argmax(max_score_per_step)
+
+                # 在该时间步，找到分数最高的变量
+                best_var_idx = np.argmax(z_scores[best_time_idx])
+            else:
+                # fallback（极少发生）
+                best_var_idx = np.argmax(z_scores.mean(axis=0))
+                best_time_idx = np.argmax(z_scores[:, best_var_idx])
+
+            predicted_root_causes.append({
+                'sample_idx': i,
+                'root_cause_var_idx': int(best_var_idx),
+                'root_cause_time': int(best_time_idx + self.window_size * 2)
+            })
+
+        # 完全保持原始的指标计算和打印
         k_all = np.array(k_all).mean(axis=0)
         k_at_step_all = np.array(k_at_step_all).mean(axis=0)
         ac_at = [k_at_step_all[0], k_at_step_all[2], k_at_step_all[4], k_at_step_all[9]]
+        ac_star_at = [k_all[0], k_all[9], k_all[99], k_all[499]]
+
         self._log_and_print('Root cause analysis AC@1: {:.5f}', ac_at[0])
         self._log_and_print('Root cause analysis AC@3: {:.5f}', ac_at[1])
         self._log_and_print('Root cause analysis AC@5: {:.5f}', ac_at[2])
         self._log_and_print('Root cause analysis AC@10: {:.5f}', ac_at[3])
         self._log_and_print('Root cause analysis Avg@10: {:.5f}', np.mean(k_at_step_all))
 
-        ac_star_at = [k_all[0], k_all[9], k_all[99], k_all[499]]
         self._log_and_print('Root cause analysis AC*@1: {:.5f}', ac_star_at[0])
         self._log_and_print('Root cause analysis AC*@10: {:.5f}', ac_star_at[1])
         self._log_and_print('Root cause analysis AC*@100: {:.5f}', ac_star_at[2])
         self._log_and_print('Root cause analysis AC*@500: {:.5f}', ac_star_at[3])
         self._log_and_print('Root cause analysis Avg*@500: {:.5f}', np.mean(k_all))
 
+        results = {
+            'ac_at': ac_at,
+            'ac_star_at': ac_star_at,
+            'avg_at_10': float(np.mean(k_at_step_all)),
+            'avg_star_at_500': float(np.mean(k_all)),
+            'predicted_root_causes': predicted_root_causes,
+            'num_vars': self.num_vars
+        }
+
+        return results
+
     def _testing_causal_discover(self, xs, causal_struct_value):
+        """因果发现测试，并返回结构化结果供可视化使用"""
         self.load_state_dict(torch.load(os.path.join(self.save_dir, f'{self.model_name}.pt'),
                                         map_location=self.device))
         self.eval()
         encoder_causal_list = []
         with torch.no_grad():
             for x in xs:
-                # Only the encoder coefficients are used for causal discovery
                 _, _, _, encoder_coeffs, _, _, _, _ = self._testing_step(x)
                 encoder_estimate = torch.max(torch.median(torch.abs(encoder_coeffs), dim=0)[0],
                                              dim=0).values.cpu().numpy()
@@ -368,6 +504,7 @@ class AERCA(nn.Module):
                                                              a_pred=encoder_a_hat_binary)
             encoder_hamming.append(ham_e)
             encoder_f1.append(f1_score(causal_struct_value.flatten(), encoder_a_hat_binary.flatten()))
+
         self._log_and_print('Causal discovery F1: {:.5f} std: {:.5f}',
                             np.mean(encoder_f1), np.std(encoder_f1))
         self._log_and_print('Causal discovery AUROC: {:.5f} std: {:.5f}',
@@ -376,3 +513,19 @@ class AERCA(nn.Module):
                             np.mean(encoder_auprc), np.std(encoder_auprc))
         self._log_and_print('Causal discovery Hamming Distance: {:.5f} std: {:.5f}',
                             np.mean(encoder_hamming), np.std(encoder_hamming))
+
+        # ====================== 新增：返回结构化结果 ======================
+        results = {
+            'f1_mean': float(np.mean(encoder_f1)),
+            'f1_std': float(np.std(encoder_f1)),
+            'auroc_mean': float(np.mean(encoder_auroc)),
+            'auroc_std': float(np.std(encoder_auroc)),
+            'auprc_mean': float(np.mean(encoder_auprc)),
+            'auprc_std': float(np.std(encoder_auprc)),
+            'hamming_mean': float(np.mean(encoder_hamming)),
+            'hamming_std': float(np.std(encoder_hamming)),
+            'predicted_causal_matrix': encoder_causal_struct_estimate_lst.mean(axis=0),  # 平均预测矩阵
+            'true_causal_matrix': causal_struct_value
+        }
+
+        return results

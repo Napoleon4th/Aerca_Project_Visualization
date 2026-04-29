@@ -10,20 +10,11 @@ from utils import utils
 import warnings
 warnings.filterwarnings("ignore")
 
+
 def main(argv):
     """
     Main function to run the AERCA model on a specified dataset.
-
-    The script supports multiple datasets. It selects the appropriate dataset class,
-    argument parser, and log file based on the provided --dataset_name argument.
-    If preprocessing_data is set to 1, the dataset is generated and saved; otherwise,
-    the existing data is loaded.
-
-    After setting the random seed and loading the data, the AERCA model is instantiated
-    with common parameters and then trained and tested accordingly.
-
-    Args:
-        argv (list): List of command-line arguments.
+    当从 Streamlit 调用时，返回结构化结果；直接运行时保持原有打印行为。
     """
     # Preliminary parsing: retrieve the dataset name.
     pre_parser = argparse.ArgumentParser(add_help=False)
@@ -36,7 +27,7 @@ def main(argv):
     pre_args, remaining_args = pre_parser.parse_known_args(argv[1:])
     dataset_name = pre_args.dataset_name.lower()
 
-    # Map dataset names to their configuration: argument parser, dataset class, log file, and slicing flag.
+    # Map dataset names to their configuration
     dataset_mapping = {
         "linear": {
             "args": linear_args.create_arg_parser,
@@ -76,15 +67,14 @@ def main(argv):
         }
     }
 
-    # Ensure the specified dataset is recognized.
     if dataset_name not in dataset_mapping:
-        print("Dataset '{}' not recognized. Available options are: {}"
-              .format(dataset_name, list(dataset_mapping.keys())))
+        print("Dataset '{}' not recognized. Available options are: {}".format(
+            dataset_name, list(dataset_mapping.keys())))
         sys.exit(1)
 
     mapping = dataset_mapping[dataset_name]
 
-    # Set up logging: create a logs directory relative to the current working directory if it doesn't exist.
+    # Set up logging
     logging_dir = os.path.join(os.getcwd(), "logs")
     if not os.path.exists(logging_dir):
         os.makedirs(logging_dir)
@@ -96,16 +86,16 @@ def main(argv):
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
 
-    # Parse the remaining command-line arguments using the dataset-specific argument parser.
+    # Parse arguments
     parser = mapping["args"]()
     args, unknown = parser.parse_known_args(remaining_args)
     options = vars(args)
 
-    # Set the random seed for reproducibility.
+    # Set seed
     utils.set_seed(options['seed'])
     print('Set seed: {}'.format(options['seed']))
 
-    # Instantiate the dataset class and generate or load data based on the preprocessing flag.
+    # Dataset
     data_class = mapping["dataset_class"](options)
     if options['preprocessing_data'] == 1:
         print('Preprocessing data: generating and saving new data...')
@@ -115,7 +105,7 @@ def main(argv):
         print('Loading existing data...')
         data_class.load_data()
 
-    # Instantiate the AERCA model using the common set of parameters.
+    # AERCA model
     aerca_model = aerca.AERCA(
         num_vars=options['num_vars'],
         hidden_layer_size=options['hidden_layer_size'],
@@ -140,9 +130,10 @@ def main(argv):
         num_candidates=options['num_candidates']
     )
 
-    # Training phase: train the model if enabled.
+    print(f"模型运行在：{next(aerca_model.parameters()).device}")
+
+    # Training
     if options['training_aerca']:
-        # Use slicing for training data if required by the dataset configuration.
         if mapping["use_slice"]:
             training_data = data_class.data_dict['x_n_list'][:options['training_size']]
         else:
@@ -151,26 +142,46 @@ def main(argv):
         aerca_model._training(training_data)
         print('Done training')
 
-    # Testing phase for causal discovery (applies only if slicing is used).
+    # Causal discovery test
     if mapping["use_slice"]:
         test_causal = data_class.data_dict['x_n_list'][options['training_size']:]
         print('Start testing AERCA model for causal discovery...')
-        aerca_model._testing_causal_discover(test_causal, data_class.data_dict['causal_struct'])
+        causal_results = aerca_model._testing_causal_discover(
+            test_causal, data_class.data_dict['causal_struct'])
         print('Done testing for causal discovery')
+    else:
+        causal_results = None
 
-    # Testing phase for root cause analysis.
+    # Root cause analysis
     if mapping["use_slice"]:
         test_x_ab = data_class.data_dict['x_ab_list'][options['training_size']:]
         test_label = data_class.data_dict['label_list'][options['training_size']:]
     else:
         test_x_ab = data_class.data_dict['x_ab_list']
         test_label = data_class.data_dict['label_list']
+
     print('Start testing AERCA model for root cause analysis...')
-    aerca_model._testing_root_cause(test_x_ab, test_label)
+    root_cause_results = aerca_model._testing_root_cause(test_x_ab, test_label)
     print('Done testing for root cause analysis')
 
-
     print('done')
+
+    # ====================== 新增：返回结构化结果供 Streamlit 使用 ======================
+    # 如果是从 Streamlit 调用（通过 sys.argv 中有特殊标记），则返回结果
+    if len(argv) > 1 and "--return_results" in argv:
+        return {
+            'root_cause_results': root_cause_results,
+            'causal_results': causal_results,
+            'test_x_ab': test_x_ab,
+            'test_label': test_label,
+            'test_causal': test_causal if mapping["use_slice"] else None,
+            'use_slice': mapping["use_slice"],
+            'training_size': options.get('training_size', 200),
+            'num_vars': options.get('num_vars', 6)
+        }
+
+    return None   # 直接运行时不返回
+
 
 if __name__ == '__main__':
     main(sys.argv)
