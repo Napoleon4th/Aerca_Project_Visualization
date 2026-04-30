@@ -80,7 +80,5 @@ results = run_main(sys.argv)               # 调用 main.py 的 main() 函数
 | **根因高亮图**          | `test_x_ab` + `results['predicted_root_causes']`   | `main.py` 返回的 `root_cause_results` |
 | **因果发现矩阵对比**    | `results['true_causal_matrix']` 和 `predicted_causal_matrix` | `main.py` 返回的 `causal_results`    |
 
-![AERCA 可视化流程图](other/mermaid-diagram.svg)
 
-<!-- 如果想控制大小 -->
-<img src="images/flowchart.svg" alt="AERCA 可视化流程图" width="800">
+<img src="other/mermaid-diagram.svg" alt="AERCA 可视化流程图" width="800">
