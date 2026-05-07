@@ -150,7 +150,14 @@ class AERCA(nn.Module):
 
         return loss
 
-    def _training(self, xs):
+    def _training(self, xs, progress_callback=None):
+        """训练模型。
+
+        progress_callback: 可选的回调函数，签名 callback(info: dict)。
+        每个 epoch 结束时调用，info 包含:
+          { 'phase': 'training', 'epoch', 'total_epochs', 'train_loss',
+            'val_loss', 'best_val_loss', 'early_stopped': bool }
+        """
         if len(xs) == 1:
             xs_train = xs[:, :int(0.8 * len(xs[0]))]
             xs_val = xs[:, int(0.8 * len(xs[0])):]
@@ -159,6 +166,7 @@ class AERCA(nn.Module):
             xs_val = xs[int(0.8 * len(xs)):]
         best_val_loss = np.inf
         count = 0
+        early_stopped = False
         for epoch in tqdm(range(self.epochs), desc=f'Epoch'):
             count += 1
             epoch_loss = 0
@@ -186,9 +194,36 @@ class AERCA(nn.Module):
                 logging.info(f'Saving model name: {self.model_name}.pt')
                 best_val_loss = epoch_val_loss
                 torch.save(self.state_dict(), os.path.join(self.save_dir, f'{self.model_name}.pt'))
+            if progress_callback is not None:
+                try:
+                    progress_callback({
+                        'phase': 'training',
+                        'epoch': epoch + 1,
+                        'total_epochs': self.epochs,
+                        'train_loss': float(epoch_loss),
+                        'val_loss': float(epoch_val_loss),
+                        'best_val_loss': float(best_val_loss),
+                        'early_stopped': False,
+                    })
+                except Exception as cb_err:  # noqa: BLE001
+                    logging.warning('progress_callback raised: %s', cb_err)
             if count >= 20:
                 print('Early stopping')
+                early_stopped = True
                 break
+        if progress_callback is not None and early_stopped:
+            try:
+                progress_callback({
+                    'phase': 'training',
+                    'epoch': epoch + 1,
+                    'total_epochs': self.epochs,
+                    'train_loss': float(epoch_loss),
+                    'val_loss': float(epoch_val_loss),
+                    'best_val_loss': float(best_val_loss),
+                    'early_stopped': True,
+                })
+            except Exception:  # noqa: BLE001
+                pass
         self.load_state_dict(torch.load(os.path.join(self.save_dir, f'{self.model_name}.pt'), map_location=self.device))
         logging.info('Training complete')
         self._get_recon_threshold(xs_val)
